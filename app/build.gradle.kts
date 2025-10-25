@@ -62,6 +62,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    implementation("androidx.appcompat:appcompat:1.6.1")
+
     // CameraX
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
@@ -75,5 +77,5 @@ dependencies {
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
 
     // ✅ TensorFlow Lite Vision Tasks
-    implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.3")
+   // implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.3")
 }

@@ -15,7 +15,6 @@ import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
-import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerOptions
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import java.util.concurrent.Executors
 
@@ -55,7 +54,7 @@ class MainActivity : AppCompatActivity() {
             .setModelAssetPath("pose_landmarker_full.task") // ✅ assets 폴더에 위치
             .build()
 
-        val options = PoseLandmarkerOptions.builder()
+        val options = PoseLandmarker.PoseLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: PoseLandmarkerResult, _ ->
