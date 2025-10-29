@@ -61,7 +61,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
 
     // CameraX
@@ -74,7 +74,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     // ✅ MediaPipe (최신 버전)
-    implementation("com.google.mediapipe:tasks-vision:0.10.14")
+    implementation("com.google.mediapipe:tasks-vision:0.10.11")
 
     // ✅ TensorFlow Lite Vision Tasks
    // implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.3")

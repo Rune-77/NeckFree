@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
@@ -11,7 +12,6 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
         previewView = findViewById(R.id.viewFinder)
         feedbackText = findViewById(R.id.feedbackText)
 
+        // 카메라 권한 체크
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -41,7 +42,8 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
 
-        setupPoseLandmarker()
+        // Mediapipe PoseLandmarker 초기화 (안전하게)
+        setupPoseLandmarkerSafely()
     }
 
     private val requestPermissionLauncher =
@@ -49,20 +51,34 @@ class MainActivity : AppCompatActivity() {
             if (granted) startCamera()
         }
 
-    private fun setupPoseLandmarker() {
-        val baseOptions = BaseOptions.builder()
-            .setModelAssetPath("pose_landmarker_full.task") // ✅ assets 폴더에 위치
-            .build()
-
-        val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-            .setBaseOptions(baseOptions)
-            .setRunningMode(RunningMode.LIVE_STREAM)
-            .setResultListener { result: PoseLandmarkerResult, _ ->
-                onPoseDetected(result)
+    // 안전하게 PoseLandmarker 초기화
+    private fun setupPoseLandmarkerSafely() {
+        try {
+            // assets 폴더에 모델이 존재하는지 확인
+            val modelName = "pose_landmarker_full.task"
+            val files = assets.list("") ?: emptyArray()
+            if (!files.contains(modelName)) {
+                Toast.makeText(this, "모델 파일이 없습니다. Pose 기능이 비활성화됩니다.", Toast.LENGTH_LONG).show()
+                return
             }
-            .build()
 
-        poseLandmarker = PoseLandmarker.createFromOptions(this, options)
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath(modelName)
+                .build()
+
+            val options = PoseLandmarker.PoseLandmarkerOptions.builder()
+                .setBaseOptions(baseOptions)
+                .setRunningMode(RunningMode.LIVE_STREAM)
+                .setResultListener { result: PoseLandmarkerResult, _ ->
+                    onPoseDetected(result)
+                }
+                .build()
+
+            poseLandmarker = PoseLandmarker.createFromOptions(this, options)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "PoseLandmarker 초기화 실패: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun startCamera() {
