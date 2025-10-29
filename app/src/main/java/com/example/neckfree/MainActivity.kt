@@ -2,28 +2,31 @@ package com.example.neckfree
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Log
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import com.google.mediapipe.tasks.core.BaseOptions
-import com.google.mediapipe.tasks.vision.core.RunningMode
-import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
-import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import com.example.neckfree.PoseAnalyzer
+import com.example.neckfree.PoseOverlayView
 import java.util.concurrent.Executors
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListener {
 
     private lateinit var previewView: PreviewView
     private lateinit var feedbackText: TextView
-    private var poseLandmarker: PoseLandmarker? = null
-
+    private lateinit var poseOverlayView: PoseOverlayView
+    private lateinit var poseLandmarkerHelper: PoseLandmarkerHelper
+    private var camera: Camera? = null
     private val executor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,77 +35,92 @@ class MainActivity : AppCompatActivity() {
 
         previewView = findViewById(R.id.viewFinder)
         feedbackText = findViewById(R.id.feedbackText)
+        poseOverlayView = findViewById<PoseOverlayView>(R.id.poseOverlay)
 
-        // 카메라 권한 체크
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissionLauncher.launch(Manifest.permission.CAMERA)
         } else {
-            startCamera()
+            setupCamera()
         }
-
-        // Mediapipe PoseLandmarker 초기화 (안전하게)
-        setupPoseLandmarkerSafely()
     }
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) startCamera()
-        }
-
-    // 안전하게 PoseLandmarker 초기화
-    private fun setupPoseLandmarkerSafely() {
-        try {
-            // assets 폴더에 모델이 존재하는지 확인
-            val modelName = "pose_landmarker_full.task"
-            val files = assets.list("") ?: emptyArray()
-            if (!files.contains(modelName)) {
-                Toast.makeText(this, "모델 파일이 없습니다. Pose 기능이 비활성화됩니다.", Toast.LENGTH_LONG).show()
-                return
+            if (granted) {
+                setupCamera()
+            } else {
+                Toast.makeText(this, "Camera permission is required.", Toast.LENGTH_SHORT).show()
+                finish()
             }
-
-            val baseOptions = BaseOptions.builder()
-                .setModelAssetPath(modelName)
-                .build()
-
-            val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-                .setBaseOptions(baseOptions)
-                .setRunningMode(RunningMode.LIVE_STREAM)
-                .setResultListener { result: PoseLandmarkerResult, _ ->
-                    onPoseDetected(result)
-                }
-                .build()
-
-            poseLandmarker = PoseLandmarker.createFromOptions(this, options)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, "PoseLandmarker 초기화 실패: ${e.message}", Toast.LENGTH_LONG).show()
         }
-    }
 
-    private fun startCamera() {
+    private fun setupCamera() {
+        poseLandmarkerHelper = PoseLandmarkerHelper(
+            context = this,
+            landmarkerListener = this
+        )
+
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
-            val preview = Preview.Builder().build().apply {
-                setSurfaceProvider(previewView.surfaceProvider)
-            }
+
+            val preview = Preview.Builder()
+                .build()
+                .apply {
+                    setSurfaceProvider(previewView.surfaceProvider)
+                }
+
+            val imageAnalyzer = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .build()
+                .also {
+                    it.setAnalyzer(executor) { imageProxy ->
+                        poseLandmarkerHelper.detectLiveStream(imageProxy)
+                    }
+                }
+
             val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
-            cameraProvider.bindToLifecycle(this, cameraSelector, preview)
+
+            try {
+                cameraProvider.unbindAll()
+                camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalyzer)
+            } catch (exc: Exception) {
+                Log.e("MainActivity", "Use case binding failed", exc)
+            }
+
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun onPoseDetected(result: PoseLandmarkerResult) {
-        val postureState = PoseAnalyzer.analyze(result)
+    override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
+        val postureState = PoseAnalyzer.analyze(resultBundle.results)
         runOnUiThread {
             feedbackText.text = postureState
+            poseOverlayView.setResults(
+                poseLandmarkerResult = resultBundle.results,
+                imageHeight = resultBundle.inputImageHeight,
+                imageWidth = resultBundle.inputImageWidth
+            )
         }
+    }
+
+    override fun onError(error: String, errorCode: Int) {
+        runOnUiThread {
+            Toast.makeText(this, error, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        poseLandmarkerHelper.clearPoseLandmarker()
+        setupCamera()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        poseLandmarker?.close()
         executor.shutdown()
+        poseLandmarkerHelper.clearPoseLandmarker()
     }
 }
