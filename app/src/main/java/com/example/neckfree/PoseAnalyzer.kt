@@ -7,15 +7,30 @@ import kotlin.math.sqrt
 
 object PoseAnalyzer {
 
-    fun analyze(result: PoseLandmarkerResult): Pair<String, Double> {
+    // ✅ 자세 상태를 명확히 구분하기 위한 Enum 클래스 추가
+    enum class PostureState {
+        GOOD,
+        TURTLE_NECK,
+        NOT_DETECTED,
+        CALIBRATING
+    }
+
+    private var customThreshold = 27.0
+
+    fun setCustomThreshold(newThreshold: Double) {
+        customThreshold = newThreshold
+    }
+
+    // ✅ 반환 타입을 Pair<PostureState, Double>로 변경
+    fun analyze(result: PoseLandmarkerResult): Pair<PostureState, Double> {
         if (result.landmarks().isEmpty()) {
-            return Pair("인식 중...", 0.0)
+            return Pair(PostureState.NOT_DETECTED, 0.0)
         }
 
         val poseLandmarks: List<NormalizedLandmark> = result.landmarks()[0]
 
         if (poseLandmarks.size < 25) {
-            return Pair("자세 측정을 위해 상체를 보여주세요.", 0.0)
+            return Pair(PostureState.NOT_DETECTED, 0.0)
         }
 
         val earMidpoint = getMidpoint(poseLandmarks[7], poseLandmarks[8])
@@ -25,8 +40,8 @@ object PoseAnalyzer {
         val neckAngle = calculateNeckAngle(earMidpoint, shoulderMidpoint, hipMidpoint)
 
         val postureState = when {
-            neckAngle > 27 -> "거북목 자세입니다. 고개를 뒤로 당기세요!"
-            else -> "좋은 자세를 유지하고 있습니다!"
+            neckAngle > customThreshold -> PostureState.TURTLE_NECK
+            else -> PostureState.GOOD
         }
 
         return Pair(postureState, neckAngle)
