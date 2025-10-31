@@ -2,66 +2,57 @@ package com.example.neckfree
 
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
-import kotlin.math.atan2
+import kotlin.math.acos
+import kotlin.math.sqrt
 
 object PoseAnalyzer {
 
-    fun analyze(result: PoseLandmarkerResult): String {
-        // 1. 사람이 인식되지 않으면 "인식 중..." 반환
+    fun analyze(result: PoseLandmarkerResult): Pair<String, Double> {
         if (result.landmarks().isEmpty()) {
-            return "인식 중..."
+            return Pair("인식 중...", 0.0)
         }
 
         val poseLandmarks: List<NormalizedLandmark> = result.landmarks()[0]
 
-        // 2. ✅ 안전장치: 상체 측정을 위한 어깨(11, 12) 좌표가 있는지 확인
-        if (poseLandmarks.size < 13) {
-            return "자세 측정을 위해 어깨를 보여주세요."
+        if (poseLandmarks.size < 25) {
+            return Pair("자세 측정을 위해 상체를 보여주세요.", 0.0)
         }
 
-        val rightEar = poseLandmarks[7]      // 오른쪽 귀
-        val rightShoulder = poseLandmarks[11] // 오른쪽 어깨
-        val leftShoulder = poseLandmarks[12]  // 왼쪽 어깨
+        val earMidpoint = getMidpoint(poseLandmarks[7], poseLandmarks[8])
+        val shoulderMidpoint = getMidpoint(poseLandmarks[11], poseLandmarks[12])
+        val hipMidpoint = getMidpoint(poseLandmarks[23], poseLandmarks[24])
 
-        // 3. 어깨선을 기준으로 목의 기울기 각도 계산
-        val neckAngle = calculateNeckAngle(rightEar, rightShoulder, leftShoulder)
+        val neckAngle = calculateNeckAngle(earMidpoint, shoulderMidpoint, hipMidpoint)
 
-        // 4. ✅ 새로운 기준에 맞춘 각도 판별
-        return when {
-            neckAngle > 20 -> "거북목 자세입니다. 고개를 뒤로 당기세요!"
+        val postureState = when {
+            neckAngle > 27 -> "거북목 자세입니다. 고개를 뒤로 당기세요!"
             else -> "좋은 자세를 유지하고 있습니다!"
         }
+
+        return Pair(postureState, neckAngle)
     }
 
-    /**
-     * 양쪽 어깨선을 기준으로 몸의 수직 벡터를 계산하고,
-     * 어깨-귀를 잇는 목 벡터와의 사이 각도를 계산합니다.
-     */
-    private fun calculateNeckAngle(
-        ear: NormalizedLandmark,
-        rShoulder: NormalizedLandmark,
-        lShoulder: NormalizedLandmark
-    ): Double {
-        // 어깨선 벡터 (오른쪽 -> 왼쪽)
-        val shoulderVx = lShoulder.x() - rShoulder.x()
-        val shoulderVy = lShoulder.y() - rShoulder.y()
+    private fun getMidpoint(p1: NormalizedLandmark, p2: NormalizedLandmark): NormalizedLandmark {
+        return NormalizedLandmark.create(
+            (p1.x() + p2.x()) / 2,
+            (p1.y() + p2.y()) / 2,
+            (p1.z() + p2.z()) / 2
+        )
+    }
 
-        // 몸의 수직 기준 벡터 (어깨선에 수직이고 위를 향함)
-        val torsoVerticalVx = -shoulderVy
-        val torsoVerticalVy = shoulderVx
+    private fun calculateNeckAngle(ear: NormalizedLandmark, shoulder: NormalizedLandmark, hip: NormalizedLandmark): Double {
+        val torsoVx = shoulder.x() - hip.x()
+        val torsoVy = shoulder.y() - hip.y()
+        val neckVx = ear.x() - shoulder.x()
+        val neckVy = ear.y() - shoulder.y()
 
-        // 목 벡터 (어깨 -> 귀)
-        val neckVx = ear.x() - rShoulder.x()
-        val neckVy = ear.y() - rShoulder.y()
+        val dotProduct = torsoVx * neckVx + torsoVy * neckVy
+        val magnitudeTorso = sqrt(torsoVx * torsoVx + torsoVy * torsoVy)
+        val magnitudeNeck = sqrt(neckVx * neckVx + neckVy * neckVy)
 
-        // 두 벡터 사이의 각도 계산
-        val angleRad = atan2(neckVy, neckVx) - atan2(torsoVerticalVy, torsoVerticalVx)
-        var angleDeg = Math.toDegrees(angleRad.toDouble())
+        if (magnitudeTorso == 0f || magnitudeNeck == 0f) return 0.0
 
-        // 각도를 -180 ~ 180 범위로 정규화
-        if (angleDeg > 180) angleDeg -= 360
-        if (angleDeg < -180) angleDeg += 360
-
-        return angleDeg
+        val angleRad = acos(dotProduct / (magnitudeTorso * magnitudeNeck))
+        return Math.toDegrees(angleRad.toDouble())
     }
 }

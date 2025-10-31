@@ -95,9 +95,9 @@ class MainActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListene
     }
 
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
-        val postureState = PoseAnalyzer.analyze(resultBundle.results)
+        val (postureState, neckAngle) = PoseAnalyzer.analyze(resultBundle.results)
         runOnUiThread {
-            feedbackText.text = postureState
+            feedbackText.text = "${postureState}\n각도: ${String.format("%.1f", neckAngle)}"
             poseOverlayView.setResults(
                 poseLandmarkerResult = resultBundle.results,
                 imageHeight = resultBundle.inputImageHeight,
