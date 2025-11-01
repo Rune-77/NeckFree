@@ -13,7 +13,6 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -22,12 +21,14 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import com.example.neckfree.db.MeasurementRecord
+import com.example.neckfree.viewmodel.StatsViewModel
 import java.util.concurrent.Executors
 import kotlin.math.sqrt
 
 class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
 
-    // ... (기존 변수들은 그대로) ...
+    // ... (기존 변수들) ...
     private lateinit var previewView: PreviewView
     private lateinit var feedbackText: TextView
     private lateinit var poseOverlayView: PoseOverlayView
@@ -46,12 +47,11 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     private val measuredAnglesWithTime = mutableListOf<Pair<Long, Double>>()
 
     private lateinit var sharedViewModel: SharedViewModel
+    private lateinit var statsViewModel: StatsViewModel // ✅ [추가] DB 작업을 위한 ViewModel
 
-    // ... (onCreateView, onViewCreated, etc. - 그대로) ...
+    // ... (onCreateView) ...
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         return inflater.inflate(R.layout.fragment_live, container, false)
     }
@@ -68,7 +68,10 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
             toggleMeasurement()
         }
 
+        // ViewModel 초기화
         sharedViewModel = ViewModelProvider(requireActivity()).get(SharedViewModel::class.java)
+        statsViewModel = ViewModelProvider(this).get(StatsViewModel::class.java) // ✅ [추가]
+
         sharedViewModel.startCalibrationEvent.observe(viewLifecycleOwner) { shouldStart ->
             if (shouldStart == true) {
                 startCalibration()
@@ -135,11 +138,23 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
             neckAnglesOverTime = ArrayList(measuredAnglesWithTime)
         )
 
-        sharedViewModel.setStatisticsResult(statsData)
+        // ✅ [수정] ViewModel을 통해 DB에 저장 요청
+        val record = MeasurementRecord(
+            goodPostureCount = statsData.goodPostureCount,
+            badPostureCount = statsData.badPostureCount,
+            totalMeasurementTimeMs = statsData.totalMeasurementTimeMs,
+            postureBreakCount = statsData.postureBreakCount,
+            averageNeckAngle = statsData.averageNeckAngle,
+            badPostureTimeMs = statsData.badPostureTimeMs,
+            neckAnglesOverTime = statsData.neckAnglesOverTime,
+            aiDiagnosis = AIAnalyzer.analyze(statsData)
+        )
+        statsViewModel.insert(record)
+
         sharedViewModel.navigateToStatsEvent.value = true
     }
 
-    // ... (startCalibration - 그대로) ...
+    // ... (나머지 코드는 동일) ...
     private fun startCalibration() {
         if (isCalibrating || isMeasuring) return
         isCalibrating = true
@@ -184,10 +199,9 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         val mean = trimmedAngles.average()
         val stdDev = sqrt(trimmedAngles.map { (it - mean) * (it - mean) }.average())
 
-        // ✅ [수정] PoseAnalyzer에 모든 교정 데이터를 전달
         PoseAnalyzer.setCalibrationData(mean, stdDev)
 
-        val newThreshold = PoseAnalyzer.getCustomThreshold() // 새로 계산된 기준값 가져오기
+        val newThreshold = PoseAnalyzer.getCustomThreshold()
         val message = "자세 설정 완료!\n새로운 기준: ${String.format("%.1f", newThreshold)}도"
         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
     }
