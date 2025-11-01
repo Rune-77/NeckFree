@@ -3,17 +3,23 @@ package com.example.neckfree
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 
+// ✅ [수정] 통계 데이터에 (시간, 각도) 쌍의 리스트를 포함하도록 변경
+data class StatisticsData(
+    val goodPostureCount: Int,
+    val badPostureCount: Int,
+    val totalMeasurementTimeMs: Long,
+    val postureBreakCount: Int,
+    val averageNeckAngle: Double,
+    val badPostureTimeMs: Long,
+    val neckAnglesOverTime: List<Pair<Long, Double>> // Pair<경과 시간(ms), 각도>
+)
+
 class SharedViewModel : ViewModel() {
-    // '자세 교정 시작' 이벤트
     val startCalibrationEvent = MutableLiveData<Boolean>()
-
-    // ✅ '통계 탭으로 이동' 이벤트
     val navigateToStatsEvent = MutableLiveData<Boolean>()
-    
-    // ✅ 통계 결과를 저장할 데이터
-    val statisticsResult = MutableLiveData<Pair<Int, Int>>() // Pair<goodCount, badCount>
+    val statisticsResult = MutableLiveData<StatisticsData>()
 
-    fun setStatisticsResult(goodCount: Int, badCount: Int) {
-        statisticsResult.value = Pair(goodCount, badCount)
+    fun setStatisticsResult(statsData: StatisticsData) {
+        statisticsResult.value = statsData
     }
 }

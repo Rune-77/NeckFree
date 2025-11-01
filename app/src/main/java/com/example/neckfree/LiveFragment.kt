@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.os.SystemClock
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -26,6 +27,7 @@ import kotlin.math.sqrt
 
 class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
 
+    // ... (기존 변수들은 그대로) ...
     private lateinit var previewView: PreviewView
     private lateinit var feedbackText: TextView
     private lateinit var poseOverlayView: PoseOverlayView
@@ -39,10 +41,13 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     private val calibrationAngles = mutableListOf<Double>()
 
     @Volatile private var isMeasuring = false
-    private val measuredStates = mutableListOf<PoseAnalyzer.PostureState>()
+    private var measurementStartTime: Long = 0
+    private val measuredStates = mutableListOf<Pair<PoseAnalyzer.PostureState, Long>>()
+    private val measuredAnglesWithTime = mutableListOf<Pair<Long, Double>>()
 
     private lateinit var sharedViewModel: SharedViewModel
 
+    // ... (onCreateView, onViewCreated, etc. - 그대로) ...
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -84,31 +89,57 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         isMeasuring = !isMeasuring
         if (isMeasuring) {
             measuredStates.clear()
+            measuredAnglesWithTime.clear()
+            measurementStartTime = SystemClock.elapsedRealtime()
             measureButton.text = "측정 종료"
             Toast.makeText(requireContext(), "자세 측정을 시작합니다.", Toast.LENGTH_SHORT).show()
         } else {
             measureButton.text = "측정 시작"
-            // ✅ [수정] 팝업 대신, ViewModel을 통해 통계 데이터와 화면 전환 이벤트를 전달
             processAndNavigateToStats()
         }
     }
 
-    // ✅ [수정] 통계 데이터를 계산하고 ViewModel에 전달하는 함수
     private fun processAndNavigateToStats() {
         if (measuredStates.isEmpty()) {
             Toast.makeText(requireContext(), "측정된 데이터가 없습니다.", Toast.LENGTH_SHORT).show()
             return
         }
-        val totalCount = measuredStates.size
-        val goodCount = measuredStates.count { it == PoseAnalyzer.PostureState.GOOD }
-        val badCount = totalCount - goodCount
 
-        // ViewModel에 결과 데이터 저장
-        sharedViewModel.setStatisticsResult(goodCount, badCount)
-        // ViewModel에 화면 전환 이벤트 발생
+        val totalMeasurementTimeMs = SystemClock.elapsedRealtime() - measurementStartTime
+        val goodCount = measuredStates.count { it.first == PoseAnalyzer.PostureState.GOOD }
+        val badCount = measuredStates.count { it.first == PoseAnalyzer.PostureState.TURTLE_NECK }
+        val averageNeckAngle = if (measuredAnglesWithTime.isNotEmpty()) measuredAnglesWithTime.map { it.second }.average() else 0.0
+        
+        var postureBreakCount = 0
+        var badPostureTimeMs: Long = 0
+        for (i in 1 until measuredStates.size) {
+            val prevState = measuredStates[i-1]
+            val currState = measuredStates[i]
+
+            if (prevState.first == PoseAnalyzer.PostureState.GOOD && currState.first == PoseAnalyzer.PostureState.TURTLE_NECK) {
+                postureBreakCount++
+            }
+            
+            if (currState.first == PoseAnalyzer.PostureState.TURTLE_NECK) {
+                badPostureTimeMs += (currState.second - prevState.second)
+            }
+        }
+
+        val statsData = StatisticsData(
+            goodPostureCount = goodCount,
+            badPostureCount = badCount,
+            totalMeasurementTimeMs = totalMeasurementTimeMs,
+            postureBreakCount = postureBreakCount,
+            averageNeckAngle = averageNeckAngle,
+            badPostureTimeMs = badPostureTimeMs,
+            neckAnglesOverTime = ArrayList(measuredAnglesWithTime)
+        )
+
+        sharedViewModel.setStatisticsResult(statsData)
         sharedViewModel.navigateToStatsEvent.value = true
     }
 
+    // ... (startCalibration - 그대로) ...
     private fun startCalibration() {
         if (isCalibrating || isMeasuring) return
         isCalibrating = true
@@ -152,20 +183,18 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         }
         val mean = trimmedAngles.average()
         val stdDev = sqrt(trimmedAngles.map { (it - mean) * (it - mean) }.average())
-        val newThreshold = mean + (2 * stdDev)
-        PoseAnalyzer.setCustomThreshold(newThreshold)
+
+        // ✅ [수정] PoseAnalyzer에 모든 교정 데이터를 전달
+        PoseAnalyzer.setCalibrationData(mean, stdDev)
+
+        val newThreshold = PoseAnalyzer.getCustomThreshold() // 새로 계산된 기준값 가져오기
         val message = "자세 설정 완료!\n새로운 기준: ${String.format("%.1f", newThreshold)}도"
         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
     }
-
-    private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
-                setupCamera()
-            } else {
-                Toast.makeText(requireContext(), "Camera permission is required.", Toast.LENGTH_SHORT).show()
-            }
-        }
+    
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) setupCamera() else Toast.makeText(requireContext(), "Camera permission is required.", Toast.LENGTH_SHORT).show()
+    }
 
     private fun setupCamera() {
         poseLandmarkerHelper = PoseLandmarkerHelper(context = requireContext(), landmarkerListener = this)
@@ -195,8 +224,11 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         if (isCollectingForCalibration) {
             calibrationAngles.add(neckAngle)
         }
+        
         if (isMeasuring) {
-            measuredStates.add(postureState)
+            val elapsedTime = SystemClock.elapsedRealtime() - measurementStartTime
+            measuredStates.add(Pair(postureState, SystemClock.elapsedRealtime()))
+            measuredAnglesWithTime.add(Pair(elapsedTime, neckAngle))
         }
 
         activity?.runOnUiThread {

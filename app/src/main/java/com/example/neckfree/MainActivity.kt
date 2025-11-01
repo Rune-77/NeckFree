@@ -34,7 +34,6 @@ class MainActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListene
     private var camera: Camera? = null
     private val executor = Executors.newSingleThreadExecutor()
 
-    // ✅ [수정] 데이터 수집 기간을 명확히 제어하기 위한 변수 추가
     private var isCalibrating = false
     private var isCollectingForCalibration = false
     private val calibrationAngles = mutableListOf<Double>()
@@ -121,7 +120,7 @@ class MainActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListene
 
             override fun onFinish() {
                 calibrationAngles.clear()
-                isCollectingForCalibration = true // ✅ 데이터 수집 시작 플래그
+                isCollectingForCalibration = true
                 object : CountDownTimer(5000, 1000) {
                     override fun onTick(millisUntilFinished: Long) {
                         feedbackText.text = "바른 자세를 유지하세요... ${millisUntilFinished / 1000}"
@@ -129,7 +128,7 @@ class MainActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListene
 
                     override fun onFinish() {
                         isCalibrating = false
-                        isCollectingForCalibration = false // ✅ 데이터 수집 종료 플래그
+                        isCollectingForCalibration = false
                         calibrationButton.isEnabled = true
                         measureButton.isEnabled = true
                         calculateAndSetThreshold()
@@ -157,10 +156,10 @@ class MainActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListene
         val mean = trimmedAngles.average()
         val stdDev = sqrt(trimmedAngles.map { (it - mean) * (it - mean) }.average())
 
-        val newThreshold = mean + (2 * stdDev)
+        // ✅ [수정] 새로운 함수 호출 방식으로 변경
+        PoseAnalyzer.setCalibrationData(mean, stdDev)
 
-        PoseAnalyzer.setCustomThreshold(newThreshold)
-
+        val newThreshold = PoseAnalyzer.getCustomThreshold()
         val message = "자세 설정 완료!\n새로운 기준: ${String.format("%.1f", newThreshold)}도"
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
@@ -199,7 +198,6 @@ class MainActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListene
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
         val (postureState, neckAngle) = PoseAnalyzer.analyze(resultBundle.results)
 
-        // ✅ [수정] 데이터 수집 기간일 때만 각도를 저장
         if (isCollectingForCalibration) {
             calibrationAngles.add(neckAngle)
         }

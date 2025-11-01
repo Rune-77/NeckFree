@@ -20,7 +20,9 @@
         android:layout_height="wrap_content"
         android:text="자세 분석 중..."
         android:textSize="20sp"
-        android:textColor="@android:color/white"
+        android:background="#80000000" 
+        android:textColor="@android:color/white" 
+        android:padding="8dp"
         android:layout_margin="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
