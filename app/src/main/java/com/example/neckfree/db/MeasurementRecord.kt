@@ -1,14 +1,20 @@
 package com.example.neckfree.db
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 
-@Entity(tableName = "measurement_records")
+@Entity(tableName = "measurement_records",
+    foreignKeys = [ForeignKey(entity = User::class,
+        parentColumns = ["id"],
+        childColumns = ["userId"],
+        onDelete = ForeignKey.CASCADE)])
 @TypeConverters(Converters::class)
 data class MeasurementRecord(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val userId: Long, // Foreign key to User table
 
     val timestamp: Long = System.currentTimeMillis(), // 측정 완료 시점
 

@@ -10,7 +10,8 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.navArgs
 import com.example.neckfree.db.MeasurementRecord
-import com.example.neckfree.viewmodel.StatsViewModel
+import com.example.neckfree.viewmodel.RecordDetailViewModel
+import com.example.neckfree.viewmodel.RecordDetailViewModelFactory
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.LimitLine
 import com.github.mikephil.charting.components.XAxis
@@ -25,7 +26,7 @@ import kotlin.math.min
 class RecordDetailFragment : Fragment() {
 
     private val args: RecordDetailFragmentArgs by navArgs()
-    private lateinit var statsViewModel: StatsViewModel
+    private lateinit var detailViewModel: RecordDetailViewModel
 
     private lateinit var lineChart: LineChart
     private lateinit var aiDiagnosisText: TextView
@@ -47,7 +48,8 @@ class RecordDetailFragment : Fragment() {
         breakCountText = view.findViewById(R.id.breakCountText)
         avgAngleText = view.findViewById(R.id.avgAngleText)
 
-        statsViewModel = ViewModelProvider(this).get(StatsViewModel::class.java)
+        val factory = RecordDetailViewModelFactory(requireActivity().application, args.recordId)
+        detailViewModel = ViewModelProvider(this, factory).get(RecordDetailViewModel::class.java)
 
         setupChart()
         observeViewModel()
@@ -80,7 +82,7 @@ class RecordDetailFragment : Fragment() {
     }
 
     private fun observeViewModel() {
-        statsViewModel.getRecordById(args.recordId).observe(viewLifecycleOwner) { record ->
+        detailViewModel.record.observe(viewLifecycleOwner) { record ->
             record?.let { updateDetailView(it) }
         }
     }

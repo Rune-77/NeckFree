@@ -1,6 +1,7 @@
 package com.example.neckfree
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -22,7 +23,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.neckfree.db.MeasurementRecord
-import com.example.neckfree.viewmodel.StatsViewModel
+import com.example.neckfree.viewmodel.LiveViewModel
 import java.util.concurrent.Executors
 import kotlin.math.sqrt
 
@@ -46,7 +47,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     private val measuredAnglesWithTime = mutableListOf<Pair<Long, Double>>()
 
     private lateinit var sharedViewModel: SharedViewModel
-    private lateinit var statsViewModel: StatsViewModel
+    private lateinit var liveViewModel: LiveViewModel
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -65,7 +66,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         measureButton.setOnClickListener { toggleMeasurement() }
 
         sharedViewModel = ViewModelProvider(requireActivity()).get(SharedViewModel::class.java)
-        statsViewModel = ViewModelProvider(this).get(StatsViewModel::class.java)
+        liveViewModel = ViewModelProvider(this).get(LiveViewModel::class.java)
 
         sharedViewModel.startCalibrationEvent.observe(viewLifecycleOwner) { shouldStart ->
             if (shouldStart == true) {
@@ -93,13 +94,21 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
             Toast.makeText(requireContext(), "자세 측정을 시작합니다.", Toast.LENGTH_SHORT).show()
         } else {
             measureButton.text = "측정 시작"
-            processAndNavigateToStats()
+            processAndSaveStats()
         }
     }
 
-    private fun processAndNavigateToStats() {
+    private fun processAndSaveStats() {
         if (measuredStates.isEmpty()) {
             Toast.makeText(requireContext(), "측정된 데이터가 없습니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val sharedPref = activity?.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        val userId = sharedPref?.getLong("logged_in_user_id", -1L) ?: -1L
+
+        if (userId == -1L) {
+            Toast.makeText(requireContext(), "Error: User not logged in.", Toast.LENGTH_LONG).show()
             return
         }
 
@@ -122,7 +131,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
                 badPostureTimeMs += (currState.second - prevState.second)
             }
         }
-
+        
         val statsData = StatisticsData(
             goodPostureCount = goodCount,
             badPostureCount = badCount,
@@ -139,6 +148,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         val calibratedStdDev = PoseAnalyzer.getCalibratedStdDev()
 
         val record = MeasurementRecord(
+            userId = userId,
             goodPostureCount = statsData.goodPostureCount,
             badPostureCount = statsData.badPostureCount,
             totalMeasurementTimeMs = statsData.totalMeasurementTimeMs,
@@ -152,8 +162,10 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
             upperThreshold = upperThreshold,
             lowerThreshold = lowerThreshold
         )
-        statsViewModel.insert(record)
-
+        liveViewModel.insert(record)
+        
+        // Pass data to StatsFragment if needed (or just navigate)
+        sharedViewModel.setStatisticsResult(statsData)
         sharedViewModel.navigateToStatsEvent.value = true
     }
 

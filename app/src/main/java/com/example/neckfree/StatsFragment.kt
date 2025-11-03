@@ -1,6 +1,7 @@
 package com.example.neckfree
 
 import android.app.AlertDialog
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -13,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.neckfree.db.MeasurementRecord
 import com.example.neckfree.db.RecordListAdapter
 import com.example.neckfree.viewmodel.StatsViewModel
+import com.example.neckfree.viewmodel.StatsViewModelFactory
 
 class StatsFragment : Fragment() {
 
@@ -41,15 +43,21 @@ class StatsFragment : Fragment() {
         recordsRecyclerView.adapter = adapter
         recordsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
 
-        statsViewModel = ViewModelProvider(this).get(StatsViewModel::class.java)
+        // Get logged-in user ID
+        val sharedPref = activity?.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        val userId = sharedPref?.getLong("logged_in_user_id", -1L) ?: -1L
 
-        observeViewModel()
+        if (userId != -1L) {
+            val factory = StatsViewModelFactory(requireActivity().application, userId)
+            statsViewModel = ViewModelProvider(this, factory).get(StatsViewModel::class.java)
+            observeViewModel()
+        }
 
         return view
     }
 
     private fun observeViewModel() {
-        statsViewModel.allRecords.observe(viewLifecycleOwner) { records ->
+        statsViewModel.recordsForUser.observe(viewLifecycleOwner) { records ->
             adapter.submitList(records)
         }
     }

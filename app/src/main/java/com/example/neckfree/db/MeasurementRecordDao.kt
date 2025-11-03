@@ -16,8 +16,8 @@ interface MeasurementRecordDao {
     @Delete
     suspend fun delete(record: MeasurementRecord)
 
-    @Query("SELECT * FROM measurement_records ORDER BY timestamp DESC")
-    fun getAllRecords(): LiveData<List<MeasurementRecord>>
+    @Query("SELECT * FROM measurement_records WHERE userId = :userId ORDER BY timestamp DESC")
+    fun getRecordsForUser(userId: Long): LiveData<List<MeasurementRecord>>
 
     // ✅ [추가] ID로 특정 기록 하나만 가져오는 기능
     @Query("SELECT * FROM measurement_records WHERE id = :recordId")

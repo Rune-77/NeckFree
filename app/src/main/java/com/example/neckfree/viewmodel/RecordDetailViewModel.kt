@@ -3,23 +3,17 @@ package com.example.neckfree.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.viewModelScope
 import com.example.neckfree.db.AppDatabase
 import com.example.neckfree.db.MeasurementRecord
 import com.example.neckfree.db.MeasurementRecordDao
-import kotlinx.coroutines.launch
 
-class StatsViewModel(application: Application, userId: Long) : AndroidViewModel(application) {
+class RecordDetailViewModel(application: Application, recordId: Long) : AndroidViewModel(application) {
 
     private val recordDao: MeasurementRecordDao
-    val recordsForUser: LiveData<List<MeasurementRecord>>
+    val record: LiveData<MeasurementRecord?>
 
     init {
         recordDao = AppDatabase.getDatabase(application).measurementRecordDao()
-        recordsForUser = recordDao.getRecordsForUser(userId)
-    }
-
-    fun delete(record: MeasurementRecord) = viewModelScope.launch {
-        recordDao.delete(record)
+        record = recordDao.getRecordById(recordId)
     }
 }
