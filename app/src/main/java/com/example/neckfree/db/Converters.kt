@@ -5,16 +5,16 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
 class Converters {
-    private val gson = Gson()
-
     @TypeConverter
-    fun fromNeckAngleList(neckAngles: List<Pair<Long, Double>>): String {
-        return gson.toJson(neckAngles)
+    fun fromPairList(value: List<Pair<Long, Double>>?): String? {
+        val gson = Gson()
+        return value?.let { gson.toJson(it) }
     }
 
     @TypeConverter
-    fun toNeckAngleList(neckAnglesString: String): List<Pair<Long, Double>> {
-        val listType = object : TypeToken<List<Pair<Long, Double>>>() {}.type
-        return gson.fromJson(neckAnglesString, listType)
+    fun toPairList(value: String?): List<Pair<Long, Double>>? {
+        val gson = Gson()
+        val type = object : TypeToken<List<Pair<Long, Double>>>() {}.type
+        return value?.let { gson.fromJson(it, type) }
     }
 }

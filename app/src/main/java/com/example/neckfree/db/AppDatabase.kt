@@ -6,12 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [MeasurementRecord::class, User::class], version = 4, exportSchema = false)
+@Database(entities = [User::class, MeasurementRecord::class], version = 1, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
-    abstract fun measurementRecordDao(): MeasurementRecordDao
     abstract fun userDao(): UserDao
+    abstract fun measurementRecordDao(): MeasurementRecordDao
 
     companion object {
         @Volatile
@@ -23,8 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "neckfree_database"
-                ).fallbackToDestructiveMigration() // important!
-                 .build()
+                ).build()
                 INSTANCE = instance
                 instance
             }

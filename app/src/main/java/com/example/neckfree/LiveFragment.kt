@@ -108,6 +108,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         } else {
             measureButton.text = "측정 시작"
         }
+        PoseAnalyzer.resetState() // Reset pose analysis state when the screen is shown
     }
 
     override fun onPause() {
@@ -152,8 +153,10 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         }
 
         val totalMeasurementTimeMs = SystemClock.elapsedRealtime() - measurementStartTime
+        
         val goodCount = measuredStates.count { it.first == PoseAnalyzer.PostureState.GOOD }
-        val badCount = measuredStates.count { it.first == PoseAnalyzer.PostureState.TURTLE_NECK }
+        val badCount = measuredStates.count { it.first == PoseAnalyzer.PostureState.TURTLE_NECK || it.first == PoseAnalyzer.PostureState.RECLINED_NECK }
+        
         val averageNeckAngle = if (measuredAnglesWithTime.isNotEmpty()) measuredAnglesWithTime.map { it.second }.average() else 0.0
 
         var postureBreakCount = 0
@@ -166,7 +169,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
                 postureBreakCount++
             }
 
-            if (currState.first != PoseAnalyzer.PostureState.GOOD) {
+            if (currState.first == PoseAnalyzer.PostureState.TURTLE_NECK || currState.first == PoseAnalyzer.PostureState.RECLINED_NECK) {
                 badPostureTimeMs += (currState.second - prevState.second)
             }
         }
@@ -324,12 +327,12 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         activity?.runOnUiThread {
             if (isCalibrating) {
                 // Calibration countdown timers in startCalibration() handle feedback text.
-                // We just need to draw the overlay.
             } else if (PoseAnalyzer.getCalibratedMean() == 0.0) {
                 feedbackText.text = "자세를 설정해주세요."
             } else {
                 val feedbackMessage = when (poseAnalysis.postureState) {
                     PoseAnalyzer.PostureState.GOOD -> "좋은 자세를 유지하고 있습니다!"
+                    PoseAnalyzer.PostureState.WARNING -> "자세가 흐트러지려 합니다. 주의하세요!"
                     PoseAnalyzer.PostureState.TURTLE_NECK -> "거북목 자세입니다. 고개를 뒤로 당기세요!"
                     PoseAnalyzer.PostureState.RECLINED_NECK -> "목을 너무 뒤로 젖혔습니다. 자세를 바로 하세요!"
                     PoseAnalyzer.PostureState.NOT_DETECTED -> "자세 분석 중..."

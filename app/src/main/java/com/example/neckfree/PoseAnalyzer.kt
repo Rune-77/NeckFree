@@ -17,6 +17,8 @@ data class PoseAnalysis(
 
 object PoseAnalyzer {
 
+    private const val BAD_POSTURE_THRESHOLD_MS = 3000L // 3 seconds
+
     fun init(context: Context, userId: Long) {
         val (mean, stdDev) = SettingsManager.getCalibrationData(context, userId)
         setCalibrationData(mean.toDouble(), stdDev.toDouble())
@@ -51,27 +53,36 @@ object PoseAnalyzer {
         }
     }
 
-    enum class PostureState { GOOD, TURTLE_NECK, RECLINED_NECK, NOT_DETECTED }
+    enum class PostureState { GOOD, TURTLE_NECK, RECLINED_NECK, NOT_DETECTED, WARNING }
 
     private var calibratedMean = 0.0
     private var calibratedStdDev = 7.5
-    // ✅ [수정] 기본 임계값 범위를 2.5배로 확장
-    private var upperThreshold = 18.75 // 7.5 * 2.5
-    private var lowerThreshold = -18.75 // -7.5 * 2.5
+    private var upperThreshold = 22.5 // 7.5 * 3.0
+    private var lowerThreshold = -22.5 // -7.5 * 3.0
 
     private val earSmoother = LandmarkSmoother(0.4f)
     private val shoulderSmoother = LandmarkSmoother(0.05f)
     private val hipSmoother = LandmarkSmoother(0.05f)
 
+    // State tracking variables
+    private var lastState: PostureState = PostureState.GOOD
+    private var stateEnterTime: Long = 0L
+
     fun setCalibrationData(mean: Double, stdDev: Double) {
         calibratedMean = mean
         calibratedStdDev = stdDev
-        // ✅ [수정] 임계값 계산 시 표준편차의 2.5배를 적용하여 범위를 넓힘
-        upperThreshold = mean + (2.5 * stdDev)
-        lowerThreshold = mean - (2.5 * stdDev)
+        // The acceptable range is now 3.0 standard deviations
+        upperThreshold = mean + (3.0 * stdDev)
+        lowerThreshold = mean - (3.0 * stdDev)
+        resetState()
+    }
+
+    fun resetState() {
         earSmoother.reset()
         shoulderSmoother.reset()
         hipSmoother.reset()
+        lastState = PostureState.GOOD
+        stateEnterTime = System.currentTimeMillis()
     }
 
     fun getUpperThreshold(): Double = upperThreshold
@@ -79,7 +90,7 @@ object PoseAnalyzer {
     fun getCalibratedMean(): Double = calibratedMean
     fun getCalibratedStdDev(): Double = calibratedStdDev
 
-    fun analyze(result: PoseLandmarkerResult, upperThreshold: Double, lowerThreshold: Double): PoseAnalysis {
+    fun analyze(result: PoseLandmarkerResult): PoseAnalysis {
         if (result.landmarks().isEmpty() || result.landmarks()[0].size < 25) {
             return PoseAnalysis(PostureState.NOT_DETECTED, 0.0, null, null, null, emptyList())
         }
@@ -100,17 +111,34 @@ object PoseAnalyzer {
 
         val finalAngle = calculateNeckAngle(smoothedEar, smoothedShoulder, smoothedHip)
 
-        val postureState = when {
+        // Determine the potential current state based on angle
+        val potentialState = when {
             finalAngle > upperThreshold -> PostureState.TURTLE_NECK
             finalAngle < lowerThreshold -> PostureState.RECLINED_NECK
             else -> PostureState.GOOD
         }
 
-        return PoseAnalysis(postureState, finalAngle, smoothedEar, smoothedShoulder, smoothedHip, landmarks)
-    }
+        val currentTime = System.currentTimeMillis()
 
-    fun analyze(result: PoseLandmarkerResult): PoseAnalysis {
-        return analyze(result, this.upperThreshold, this.lowerThreshold)
+        // Check if state has changed
+        if (potentialState != lastState) {
+            lastState = potentialState
+            stateEnterTime = currentTime
+        }
+
+        // Determine the final state based on time
+        val finalState = if (lastState == PostureState.GOOD) {
+            PostureState.GOOD
+        } else {
+            val timeInState = currentTime - stateEnterTime
+            if (timeInState >= BAD_POSTURE_THRESHOLD_MS) {
+                lastState // It's a confirmed bad posture
+            } else {
+                PostureState.WARNING // It's a temporary warning
+            }
+        }
+
+        return PoseAnalysis(finalState, finalAngle, smoothedEar, smoothedShoulder, smoothedHip, landmarks)
     }
 
     private fun getDynamicAnchor(p1: NormalizedLandmark, p2: NormalizedLandmark): NormalizedLandmark? {
