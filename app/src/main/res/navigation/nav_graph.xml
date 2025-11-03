@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/navigation_live">
+
+    <fragment
+        android:id="@+id/navigation_live"
+        android:name="com.example.neckfree.LiveFragment"
+        android:label="LiveFragment"
+        tools:layout="@layout/fragment_live" />
+
+    <fragment
+        android:id="@+id/navigation_stats"
+        android:name="com.example.neckfree.StatsFragment"
+        android:label="StatsFragment"
+        tools:layout="@layout/fragment_stats" >
+        <action
+            android:id="@+id/action_stats_to_detail"
+            app:destination="@id/navigation_record_detail" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_settings"
+        android:name="com.example.neckfree.SettingsFragment"
+        android:label="SettingsFragment"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/navigation_record_detail"
+        android:name="com.example.neckfree.RecordDetailFragment"
+        android:label="RecordDetailFragment"
+        tools:layout="@layout/fragment_record_detail">
+        <argument
+            android:name="recordId"
+            app:argType="long" />
+    </fragment>
+
+</navigation>

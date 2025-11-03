@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/neckfree?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
+    password: 1234   # 설치 시 입력한 비밀번호로 변경
+
+  jpa:
+    hibernate:
+      ddl-auto: update     # 자동으로 테이블 생성/수정
+    show-sql: true         # 실행된 SQL 콘솔에 출력
+    properties:
+      hibernate:
+        format_sql: true   # SQL 보기 좋게 출력
+
+server:
+  port: 8080
