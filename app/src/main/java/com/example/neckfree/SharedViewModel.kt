@@ -18,6 +18,7 @@ class SharedViewModel : ViewModel() {
     val startCalibrationEvent = MutableLiveData<Boolean>()
     val navigateToStatsEvent = MutableLiveData<Boolean>()
     val statisticsResult = MutableLiveData<Map<String, StatisticsData>>(emptyMap())
+    val isMeasuring = MutableLiveData<Boolean>(false)
 
     fun setStatisticsResult(userId: String, statsData: StatisticsData) {
         val currentMap = statisticsResult.value ?: emptyMap()
@@ -28,5 +29,12 @@ class SharedViewModel : ViewModel() {
 
     fun getStatisticsResultForUser(userId: String): StatisticsData? {
         return statisticsResult.value?.get(userId)
+    }
+
+    fun clearData() {
+        statisticsResult.value = emptyMap()
+        startCalibrationEvent.value = false
+        navigateToStatsEvent.value = false
+        isMeasuring.value = false
     }
 }

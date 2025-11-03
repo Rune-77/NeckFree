@@ -42,13 +42,15 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     @Volatile private var isCollectingForCalibration = false
     private val calibrationAngles = mutableListOf<Double>()
 
-    @Volatile private var isMeasuring = false
     private var measurementStartTime: Long = 0
     private val measuredStates = mutableListOf<Pair<PoseAnalyzer.PostureState, Long>>()
     private val measuredAnglesWithTime = mutableListOf<Pair<Long, Double>>()
 
     private lateinit var sharedViewModel: SharedViewModel
     private lateinit var liveViewModel: LiveViewModel
+
+    private var calibrationTimer: CountDownTimer? = null
+    private var collectionTimer: CountDownTimer? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -98,9 +100,32 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Sync button text with measurement state when user returns to the screen
+        if (sharedViewModel.isMeasuring.value == true) {
+            measureButton.text = "측정 종료"
+        } else {
+            measureButton.text = "측정 시작"
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // If measuring, stop and discard the measurement when the user navigates away
+        if (sharedViewModel.isMeasuring.value == true) {
+            sharedViewModel.isMeasuring.value = false
+            measuredStates.clear()
+            measuredAnglesWithTime.clear()
+            Toast.makeText(requireContext(), "측정이 중단되었습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun toggleMeasurement() {
-        isMeasuring = !isMeasuring
-        if (isMeasuring) {
+        val isCurrentlyMeasuring = sharedViewModel.isMeasuring.value ?: false
+        sharedViewModel.isMeasuring.value = !isCurrentlyMeasuring
+
+        if (!isCurrentlyMeasuring) {
             measuredStates.clear()
             measuredAnglesWithTime.clear()
             measurementStartTime = SystemClock.elapsedRealtime()
@@ -183,12 +208,12 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     }
 
     private fun startCalibration() {
-        if (isCalibrating || isMeasuring) return
+        if (sharedViewModel.isMeasuring.value == true || isCalibrating) return
         isCalibrating = true
         measureButton.isEnabled = false
         poseOverlayView.setCalibrationGuideVisibility(true)
 
-        object : CountDownTimer(5000, 1000) {
+        calibrationTimer = object : CountDownTimer(5000, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 feedbackText.text = "화면의 수직선에 귀가 오도록 자세를 맞춰주세요... ${millisUntilFinished / 1000 + 1}"
             }
@@ -198,7 +223,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
                 calibrationAngles.clear()
                 isCollectingForCalibration = true
 
-                object : CountDownTimer(5000, 1000) {
+                collectionTimer = object : CountDownTimer(5000, 1000) {
                     override fun onTick(millisUntilFinished: Long) {
                         feedbackText.text = "좋습니다! 이제 그 자세를 5초간 유지해주세요... ${millisUntilFinished / 1000}"
                     }
@@ -290,7 +315,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
             calibrationAngles.add(poseAnalysis.displayAngle)
         }
 
-        if (isMeasuring) {
+        if (sharedViewModel.isMeasuring.value == true) {
             val elapsedTime = SystemClock.elapsedRealtime() - measurementStartTime
             measuredStates.add(Pair(poseAnalysis.postureState, SystemClock.elapsedRealtime()))
             measuredAnglesWithTime.add(Pair(elapsedTime, poseAnalysis.displayAngle))
@@ -320,6 +345,14 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
 
     override fun onError(error: String, errorCode: Int) {
         activity?.runOnUiThread { Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show() }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        calibrationTimer?.cancel()
+        collectionTimer?.cancel()
+        isCalibrating = false
+        isCollectingForCalibration = false
     }
 
     override fun onDestroy() {

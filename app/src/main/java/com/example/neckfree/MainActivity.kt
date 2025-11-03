@@ -20,6 +20,7 @@ class MainActivity : AppCompatActivity() {
         val navView: BottomNavigationView = findViewById(R.id.bottom_nav_view)
         val navController = findNavController(R.id.nav_host_fragment)
 
+        // Handles showing/hiding nav bar for login screens
         navController.addOnDestinationChangedListener { _, destination, _ ->
             when (destination.id) {
                 R.id.loginFragment, R.id.signUpFragment -> {

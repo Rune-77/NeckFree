@@ -61,6 +61,9 @@ class SettingsFragment : Fragment() {
 
         val logoutButton: Button = view.findViewById(R.id.logoutButton)
         logoutButton.setOnClickListener {
+            // Clear data from ViewModel
+            sharedViewModel.clearData()
+
             // Clear user session
             sharedPref?.edit()?.remove("logged_in_user_id")?.apply()
 
