@@ -70,7 +70,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         sharedViewModel.startCalibrationEvent.observe(viewLifecycleOwner) { shouldStart ->
             if (shouldStart == true) {
                 startCalibration()
-                sharedViewModel.startCalibrationEvent.value = false 
+                sharedViewModel.startCalibrationEvent.value = false
             }
         }
 
@@ -107,7 +107,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         val goodCount = measuredStates.count { it.first == PoseAnalyzer.PostureState.GOOD }
         val badCount = measuredStates.count { it.first == PoseAnalyzer.PostureState.TURTLE_NECK }
         val averageNeckAngle = if (measuredAnglesWithTime.isNotEmpty()) measuredAnglesWithTime.map { it.second }.average() else 0.0
-        
+
         var postureBreakCount = 0
         var badPostureTimeMs: Long = 0
         for (i in 1 until measuredStates.size) {
@@ -117,7 +117,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
             if (prevState.first == PoseAnalyzer.PostureState.GOOD && (currState.first == PoseAnalyzer.PostureState.TURTLE_NECK || currState.first == PoseAnalyzer.PostureState.RECLINED_NECK)) {
                 postureBreakCount++
             }
-            
+
             if (currState.first != PoseAnalyzer.PostureState.GOOD) {
                 badPostureTimeMs += (currState.second - prevState.second)
             }
@@ -205,13 +205,14 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         val stdDev = sqrt(trimmedAngles.map { (it - mean) * (it - mean) }.average())
 
         PoseAnalyzer.setCalibrationData(mean, stdDev)
+        SettingsManager.saveCalibrationData(requireContext(), mean.toFloat(), stdDev.toFloat())
 
         val upper = PoseAnalyzer.getUpperThreshold()
         val lower = PoseAnalyzer.getLowerThreshold()
         val message = "자세 설정 완료!\n안전 범위: ${String.format("%.1f", lower)}° ~ ${String.format("%.1f", upper)}°"
         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
     }
-    
+
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) setupCamera() else Toast.makeText(requireContext(), "Camera permission is required.", Toast.LENGTH_SHORT).show()
     }
@@ -239,29 +240,29 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
 
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
         if (!isAdded) return
-        val (postureState, finalAngle) = PoseAnalyzer.analyze(resultBundle.results)
+        val poseAnalysis = PoseAnalyzer.analyze(resultBundle.results)
 
         if (isCollectingForCalibration) {
-            calibrationAngles.add(finalAngle)
+            calibrationAngles.add(poseAnalysis.displayAngle)
         }
-        
+
         if (isMeasuring) {
             val elapsedTime = SystemClock.elapsedRealtime() - measurementStartTime
-            measuredStates.add(Pair(postureState, SystemClock.elapsedRealtime()))
-            measuredAnglesWithTime.add(Pair(elapsedTime, finalAngle))
+            measuredStates.add(Pair(poseAnalysis.postureState, SystemClock.elapsedRealtime()))
+            measuredAnglesWithTime.add(Pair(elapsedTime, poseAnalysis.displayAngle))
         }
 
         activity?.runOnUiThread {
-            val feedbackMessage = when (postureState) {
+            val feedbackMessage = when (poseAnalysis.postureState) {
                 PoseAnalyzer.PostureState.GOOD -> "좋은 자세를 유지하고 있습니다!"
                 PoseAnalyzer.PostureState.TURTLE_NECK -> "거북목 자세입니다. 고개를 뒤로 당기세요!"
                 PoseAnalyzer.PostureState.RECLINED_NECK -> "목을 너무 뒤로 젖혔습니다. 자세를 바로 하세요!"
                 PoseAnalyzer.PostureState.NOT_DETECTED -> "자세 분석 중..."
             }
             if (!isCalibrating) {
-                feedbackText.text = "${feedbackMessage}\n각도: ${String.format("%.1f", finalAngle)}"
-            } 
-            poseOverlayView.setResults(PoseAnalyzer.analyze(resultBundle.results), resultBundle.inputImageHeight, resultBundle.inputImageWidth)
+                feedbackText.text = "${feedbackMessage}\n각도: ${String.format("%.1f", poseAnalysis.displayAngle)}"
+            }
+            poseOverlayView.setResults(poseAnalysis, resultBundle.inputImageHeight, resultBundle.inputImageWidth)
         }
     }
 

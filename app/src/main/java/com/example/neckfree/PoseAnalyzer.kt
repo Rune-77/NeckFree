@@ -1,5 +1,6 @@
 package com.example.neckfree
 
+import android.content.Context
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import kotlin.math.atan2
@@ -15,6 +16,11 @@ data class PoseAnalysis(
 )
 
 object PoseAnalyzer {
+
+    fun init(context: Context) {
+        val (mean, stdDev) = SettingsManager.getCalibrationData(context)
+        setCalibrationData(mean.toDouble(), stdDev.toDouble())
+    }
 
     enum class ViewingDirection {
         LEFT, RIGHT
