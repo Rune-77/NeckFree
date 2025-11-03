@@ -1,6 +1,8 @@
 package com.example.neckfree
 
+import android.content.Context
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.findNavController
@@ -18,21 +20,29 @@ class MainActivity : AppCompatActivity() {
         val navView: BottomNavigationView = findViewById(R.id.bottom_nav_view)
         val navController = findNavController(R.id.nav_host_fragment)
 
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            when (destination.id) {
+                R.id.loginFragment, R.id.signUpFragment -> {
+                    navView.visibility = View.GONE
+                }
+                else -> {
+                    navView.visibility = View.VISIBLE
+                }
+            }
+        }
+
         navView.setupWithNavController(navController)
 
         sharedViewModel = ViewModelProvider(this).get(SharedViewModel::class.java)
+    }
 
-        // Apply the saved viewing direction setting at startup
-        val savedDirection = SettingsManager.getViewingDirection(this)
-        PoseAnalyzer.setViewingDirection(savedDirection)
-
-        // Listen for navigation changes to decide when to trigger calibration
-        navController.addOnDestinationChangedListener { _, destination, _ ->
-            if (destination.id == R.id.navigation_live) {
-                // This logic is now primarily handled within LiveFragment itself,
-                // but you could add logic here if needed, for example, to reset
-                // calibration when navigating away and back to the live fragment.
-            }
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clear login status when the app is closed
+        val sharedPref = getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            remove("logged_in_user_id")
+            apply()
         }
     }
 }

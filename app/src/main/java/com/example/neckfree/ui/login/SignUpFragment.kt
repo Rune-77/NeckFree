@@ -10,6 +10,7 @@ import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import com.example.neckfree.R
 import com.example.neckfree.databinding.FragmentSignupBinding
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class SignUpFragment : Fragment() {
 
@@ -28,6 +29,8 @@ class SignUpFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        activity?.findViewById<BottomNavigationView>(R.id.bottom_nav_view)?.visibility = View.GONE
 
         viewModel.signUpResult.observe(viewLifecycleOwner) { success ->
             if (success) {

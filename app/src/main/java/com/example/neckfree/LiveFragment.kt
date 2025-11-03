@@ -24,6 +24,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.neckfree.db.MeasurementRecord
 import com.example.neckfree.viewmodel.LiveViewModel
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import java.util.concurrent.Executors
 import kotlin.math.sqrt
 
@@ -58,6 +59,8 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        activity?.findViewById<BottomNavigationView>(R.id.bottom_nav_view)?.visibility = View.VISIBLE
+
         previewView = view.findViewById(R.id.viewFinder)
         feedbackText = view.findViewById(R.id.feedbackText)
         poseOverlayView = view.findViewById(R.id.poseOverlay)
@@ -68,10 +71,21 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         sharedViewModel = ViewModelProvider(requireActivity()).get(SharedViewModel::class.java)
         liveViewModel = ViewModelProvider(this).get(LiveViewModel::class.java)
 
+        val sharedPref = activity?.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        val userId = sharedPref?.getLong("logged_in_user_id", -1L) ?: -1L
+
+        if (userId != -1L) {
+            PoseAnalyzer.init(requireContext(), userId)
+            val savedDirection = SettingsManager.getViewingDirection(requireContext(), userId)
+            PoseAnalyzer.setViewingDirection(savedDirection)
+        }
+
+        updateFeedbackText()
+
         sharedViewModel.startCalibrationEvent.observe(viewLifecycleOwner) { shouldStart ->
             if (shouldStart == true) {
                 startCalibration()
-                sharedViewModel.startCalibrationEvent.value = false
+                sharedViewModel.startCalibrationEvent.value = false // Reset the event
             }
         }
 
@@ -164,8 +178,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         )
         liveViewModel.insert(record)
         
-        // Pass data to StatsFragment if needed (or just navigate)
-        sharedViewModel.setStatisticsResult(statsData)
+        sharedViewModel.setStatisticsResult(userId.toString(), statsData)
         sharedViewModel.navigateToStatsEvent.value = true
     }
 
@@ -217,12 +230,30 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         val stdDev = sqrt(trimmedAngles.map { (it - mean) * (it - mean) }.average())
 
         PoseAnalyzer.setCalibrationData(mean, stdDev)
-        SettingsManager.saveCalibrationData(requireContext(), mean.toFloat(), stdDev.toFloat())
 
+        val sharedPref = activity?.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        val userId = sharedPref?.getLong("logged_in_user_id", -1L) ?: -1L
+
+        if (userId != -1L) {
+            SettingsManager.saveCalibrationData(requireContext(), mean.toFloat(), stdDev.toFloat(), userId)
+        }
+
+        updateFeedbackText()
         val upper = PoseAnalyzer.getUpperThreshold()
         val lower = PoseAnalyzer.getLowerThreshold()
         val message = "자세 설정 완료!\n안전 범위: ${String.format("%.1f", lower)}° ~ ${String.format("%.1f", upper)}°"
         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun updateFeedbackText() {
+        val calibratedMean = PoseAnalyzer.getCalibratedMean()
+        if (calibratedMean == 0.0) {
+            feedbackText.text = "자세를 설정해주세요."
+        } else {
+            val upper = PoseAnalyzer.getUpperThreshold()
+            val lower = PoseAnalyzer.getLowerThreshold()
+            feedbackText.text = "안전 범위: ${String.format("%.1f", lower)}° ~ ${String.format("%.1f", upper)}°"
+        }
     }
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -252,6 +283,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
 
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
         if (!isAdded) return
+
         val poseAnalysis = PoseAnalyzer.analyze(resultBundle.results)
 
         if (isCollectingForCalibration) {
@@ -265,14 +297,22 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
         }
 
         activity?.runOnUiThread {
-            val feedbackMessage = when (poseAnalysis.postureState) {
-                PoseAnalyzer.PostureState.GOOD -> "좋은 자세를 유지하고 있습니다!"
-                PoseAnalyzer.PostureState.TURTLE_NECK -> "거북목 자세입니다. 고개를 뒤로 당기세요!"
-                PoseAnalyzer.PostureState.RECLINED_NECK -> "목을 너무 뒤로 젖혔습니다. 자세를 바로 하세요!"
-                PoseAnalyzer.PostureState.NOT_DETECTED -> "자세 분석 중..."
-            }
-            if (!isCalibrating) {
-                feedbackText.text = "${feedbackMessage}\n각도: ${String.format("%.1f", poseAnalysis.displayAngle)}"
+            if (isCalibrating) {
+                // Calibration countdown timers in startCalibration() handle feedback text.
+                // We just need to draw the overlay.
+            } else if (PoseAnalyzer.getCalibratedMean() == 0.0) {
+                feedbackText.text = "자세를 설정해주세요."
+            } else {
+                val feedbackMessage = when (poseAnalysis.postureState) {
+                    PoseAnalyzer.PostureState.GOOD -> "좋은 자세를 유지하고 있습니다!"
+                    PoseAnalyzer.PostureState.TURTLE_NECK -> "거북목 자세입니다. 고개를 뒤로 당기세요!"
+                    PoseAnalyzer.PostureState.RECLINED_NECK -> "목을 너무 뒤로 젖혔습니다. 자세를 바로 하세요!"
+                    PoseAnalyzer.PostureState.NOT_DETECTED -> "자세 분석 중..."
+                }
+                val upper = PoseAnalyzer.getUpperThreshold()
+                val lower = PoseAnalyzer.getLowerThreshold()
+                val rangeText = "안전 범위: ${String.format("%.1f", lower)}° ~ ${String.format("%.1f", upper)}°"
+                feedbackText.text = "${rangeText}\n${feedbackMessage}\n각도: ${String.format("%.1f", poseAnalysis.displayAngle)}"
             }
             poseOverlayView.setResults(poseAnalysis, resultBundle.inputImageHeight, resultBundle.inputImageWidth)
         }

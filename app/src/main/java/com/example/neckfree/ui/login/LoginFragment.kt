@@ -11,6 +11,7 @@ import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import com.example.neckfree.R
 import com.example.neckfree.databinding.FragmentLoginBinding
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class LoginFragment : Fragment() {
 
@@ -29,6 +30,8 @@ class LoginFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        activity?.findViewById<BottomNavigationView>(R.id.bottom_nav_view)?.visibility = View.GONE
 
         viewModel.loginResult.observe(viewLifecycleOwner) { result ->
             if (result.success != null) {

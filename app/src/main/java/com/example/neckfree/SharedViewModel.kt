@@ -17,9 +17,16 @@ data class StatisticsData(
 class SharedViewModel : ViewModel() {
     val startCalibrationEvent = MutableLiveData<Boolean>()
     val navigateToStatsEvent = MutableLiveData<Boolean>()
-    val statisticsResult = MutableLiveData<StatisticsData>()
+    val statisticsResult = MutableLiveData<Map<String, StatisticsData>>(emptyMap())
 
-    fun setStatisticsResult(statsData: StatisticsData) {
-        statisticsResult.value = statsData
+    fun setStatisticsResult(userId: String, statsData: StatisticsData) {
+        val currentMap = statisticsResult.value ?: emptyMap()
+        val newMap = currentMap.toMutableMap()
+        newMap[userId] = statsData
+        statisticsResult.value = newMap
+    }
+
+    fun getStatisticsResultForUser(userId: String): StatisticsData? {
+        return statisticsResult.value?.get(userId)
     }
 }

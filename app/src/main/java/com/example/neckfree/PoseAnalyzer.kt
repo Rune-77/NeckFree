@@ -17,8 +17,8 @@ data class PoseAnalysis(
 
 object PoseAnalyzer {
 
-    fun init(context: Context) {
-        val (mean, stdDev) = SettingsManager.getCalibrationData(context)
+    fun init(context: Context, userId: Long) {
+        val (mean, stdDev) = SettingsManager.getCalibrationData(context, userId)
         setCalibrationData(mean.toDouble(), stdDev.toDouble())
     }
 

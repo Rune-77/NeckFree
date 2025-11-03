@@ -15,6 +15,7 @@ import com.example.neckfree.db.MeasurementRecord
 import com.example.neckfree.db.RecordListAdapter
 import com.example.neckfree.viewmodel.StatsViewModel
 import com.example.neckfree.viewmodel.StatsViewModelFactory
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class StatsFragment : Fragment() {
 
@@ -54,6 +55,11 @@ class StatsFragment : Fragment() {
         }
 
         return view
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        activity?.findViewById<BottomNavigationView>(R.id.bottom_nav_view)?.visibility = View.VISIBLE
     }
 
     private fun observeViewModel() {
