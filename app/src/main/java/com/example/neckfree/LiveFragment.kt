@@ -52,6 +52,11 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     private var calibrationTimer: CountDownTimer? = null
     private var collectionTimer: CountDownTimer? = null
 
+    // Cooldown/Grace Period variables
+    private var lastDetectionTime: Long = 0L
+    private var isStabilizing = false
+    private val gracePeriodMs = 2000L
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
@@ -109,6 +114,7 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
             measureButton.text = "측정 시작"
         }
         PoseAnalyzer.resetState() // Reset pose analysis state when the screen is shown
+        isStabilizing = false // Reset stabilization state
     }
 
     override fun onPause() {
@@ -312,21 +318,56 @@ class LiveFragment : Fragment(), PoseLandmarkerHelper.LandmarkerListener {
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
         if (!isAdded) return
 
+        val currentTime = SystemClock.elapsedRealtime()
         val poseAnalysis = PoseAnalyzer.analyze(resultBundle.results)
 
+        // Handle stabilization period, but ONLY during measurement, not calibration.
+        if (isStabilizing && !isCalibrating) {
+            if (currentTime - lastDetectionTime < gracePeriodMs) {
+                activity?.runOnUiThread {
+                    feedbackText.text = "자세 안정화 중..."
+                    poseOverlayView.setResults(poseAnalysis, resultBundle.inputImageHeight, resultBundle.inputImageWidth)
+                }
+                return // Skip data collection during stabilization
+            } else {
+                isStabilizing = false // End stabilization period
+            }
+        }
+
+        if (poseAnalysis.postureState == PoseAnalyzer.PostureState.NOT_DETECTED) {
+            if (lastDetectionTime > 0) { // Was previously detecting
+                // Remove data from the grace period before detection was lost
+                val cutoffTime = lastDetectionTime - gracePeriodMs
+                measuredStates.removeAll { it.second >= cutoffTime }
+                
+                val elapsedCutoffTime = (lastDetectionTime - measurementStartTime) - gracePeriodMs
+                measuredAnglesWithTime.removeAll { it.first >= elapsedCutoffTime }
+            }
+            lastDetectionTime = 0 // Mark as not detecting
+            
+            activity?.runOnUiThread { feedbackText.text = "자세 분석 중..." }
+            return
+        } else {
+            if (lastDetectionTime == 0L) { // Was previously NOT detecting
+                isStabilizing = true
+            }
+            lastDetectionTime = currentTime
+        }
+
+        // Data collection, only if not stabilizing and detection is valid
         if (isCollectingForCalibration) {
             calibrationAngles.add(poseAnalysis.displayAngle)
         }
 
         if (sharedViewModel.isMeasuring.value == true) {
             val elapsedTime = SystemClock.elapsedRealtime() - measurementStartTime
-            measuredStates.add(Pair(poseAnalysis.postureState, SystemClock.elapsedRealtime()))
+            measuredStates.add(Pair(poseAnalysis.postureState, currentTime))
             measuredAnglesWithTime.add(Pair(elapsedTime, poseAnalysis.displayAngle))
         }
 
         activity?.runOnUiThread {
             if (isCalibrating) {
-                // Calibration countdown timers in startCalibration() handle feedback text.
+                // Calibration countdown timers handle feedback text
             } else if (PoseAnalyzer.getCalibratedMean() == 0.0) {
                 feedbackText.text = "자세를 설정해주세요."
             } else {

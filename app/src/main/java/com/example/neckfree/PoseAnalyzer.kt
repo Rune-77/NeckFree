@@ -3,6 +3,7 @@ package com.example.neckfree
 import android.content.Context
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+import kotlin.math.abs
 import kotlin.math.atan2
 
 // 데이터 클래스를 파일 최상단에 독립적으로 정의
@@ -18,6 +19,7 @@ data class PoseAnalysis(
 object PoseAnalyzer {
 
     private const val BAD_POSTURE_THRESHOLD_MS = 3000L // 3 seconds
+    private const val MAX_SANE_ANGLE = 45.0 // Outlier threshold
 
     fun init(context: Context, userId: Long) {
         val (mean, stdDev) = SettingsManager.getCalibrationData(context, userId)
@@ -110,6 +112,11 @@ object PoseAnalyzer {
         val smoothedHip = hipSmoother.apply(hipAnchor)
 
         val finalAngle = calculateNeckAngle(smoothedEar, smoothedShoulder, smoothedHip)
+
+        // Outlier detection: if angle is physically improbable, treat as not detected
+        if (abs(finalAngle) > MAX_SANE_ANGLE) {
+            return PoseAnalysis(PostureState.NOT_DETECTED, finalAngle, smoothedEar, smoothedShoulder, smoothedHip, landmarks)
+        }
 
         // Determine the potential current state based on angle
         val potentialState = when {
